@@ -17,13 +17,15 @@ var visitedUrls = struct {
 	urls map[string]bool
 }{urls: make(map[string]bool)}
 
+//to wait for all concurrent crawlers finish their works
+var wg sync.WaitGroup
+
 // Crawl uses fetcher to recursively crawl
 // pages starting with url, to a maximum of depth.
 func Crawl(url string, depth int, fetcher Fetcher) {
-	// TODO: Fetch URLs in parallel.
+	// The implementation of Fetch URLs in parallel done
 	// The implementation of "Don't fetch the same URL twice." is done
-	// This implementation doesn't do either:
-
+	defer wg.Done()
 	visitedUrls.RLock()
 	_, visited := visitedUrls.urls[url]
 	visitedUrls.RUnlock()
@@ -45,14 +47,18 @@ func Crawl(url string, depth int, fetcher Fetcher) {
 	}
 	fmt.Printf("found: %s %q\n", url, body)
 	for _, u := range urls {
-		Crawl(u, depth-1, fetcher)
+		wg.Add(1)
+		go Crawl(u, depth-1, fetcher)
 	}
 	return
 }
 
 func main() {
 	populateFakeFatcherStruct()
+	wg.Add(1)
 	Crawl("http://golang.org/", 4, fetcher)
+	wg.Wait()
+	fmt.Print("crawled all successfully")
 }
 
 // fakeFetcher is Fetcher that returns canned results.
