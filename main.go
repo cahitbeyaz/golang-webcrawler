@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sync"
 )
 
 type Fetcher interface {
@@ -10,21 +11,39 @@ type Fetcher interface {
 	Fetch(url string) (body string, urls []string, err error)
 }
 
+//visitedUrls is used to cache urls visited. the value of map is expected to be always true
+var visitedUrls = struct {
+	sync.RWMutex
+	urls map[string]bool
+}{urls: make(map[string]bool)}
+
 // Crawl uses fetcher to recursively crawl
 // pages starting with url, to a maximum of depth.
 func Crawl(url string, depth int, fetcher Fetcher) {
 	// TODO: Fetch URLs in parallel.
-	// TODO: Don't fetch the same URL twice.
+	// The implementation of "Don't fetch the same URL twice." is done
 	// This implementation doesn't do either:
+
+	visitedUrls.RLock()
+	_, visited := visitedUrls.urls[url]
+	visitedUrls.RUnlock()
+
+	if visited {
+		return
+	}
 	if depth <= 0 {
 		return
 	}
+
 	body, urls, err := fetcher.Fetch(url)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 	fmt.Printf("found: %s %q\n", url, body)
+	visitedUrls.Lock()
+	visitedUrls.urls[url] = true
+	visitedUrls.Unlock()
 	for _, u := range urls {
 		Crawl(u, depth-1, fetcher)
 	}
@@ -49,6 +68,8 @@ func (f fakeFetcher) Fetch(url string) (string, []string, error) {
 	}
 	return "", nil, fmt.Errorf("not found: %s", url)
 }
+
+var anotherFetcher = fakeFetcher{}
 
 // fetcher is a populated fakeFetcher.
 var fetcher = fakeFetcher{
